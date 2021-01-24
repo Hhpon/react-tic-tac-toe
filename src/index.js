@@ -3,8 +3,9 @@ import ReactDOM from "react-dom"
 import "./index.css"
 
 function Square(props) {
+  const style = { color: props.isIt ? "red" : "" }
   return (
-    <button className='square' onClick={props.onClick}>
+    <button className='square' style={style} onClick={props.onClick}>
       {props.value}
     </button>
   )
@@ -24,7 +25,10 @@ function calculateWinner(squares) {
   for (let i = 0; i < lines.length; i++) {
     const [a, b, c] = lines[i]
     if (squares[a] && squares[a] === squares[b] && squares[a] === squares[c]) {
-      return squares[a]
+      return {
+        winner: squares[a],
+        lineSquares: lines[i],
+      }
     }
   }
   return null
@@ -32,29 +36,21 @@ function calculateWinner(squares) {
 
 class Board extends React.Component {
   renderSquare(i) {
-    return <Square value={this.props.squares[i]} onClick={() => this.props.onClick(i)} />
+    return <Square isIt={this.props.lineSquares.includes(i)} value={this.props.squares[i]} onClick={() => this.props.onClick(i)} />
   }
 
   render() {
-    return (
-      <div>
-        <div className='board-row'>
-          {this.renderSquare(0)}
-          {this.renderSquare(1)}
-          {this.renderSquare(2)}
-        </div>
-        <div className='board-row'>
-          {this.renderSquare(3)}
-          {this.renderSquare(4)}
-          {this.renderSquare(5)}
-        </div>
-        <div className='board-row'>
-          {this.renderSquare(6)}
-          {this.renderSquare(7)}
-          {this.renderSquare(8)}
-        </div>
-      </div>
-    )
+    const boardItem = Array(3)
+      .fill(null)
+      .map((row, rowIndex) => {
+        const rowItem = Array(3)
+          .fill(null)
+          .map((col, colIndex) => {
+            return this.renderSquare(rowIndex * 3 + colIndex)
+          })
+        return <div className='board-row'>{rowItem}</div>
+      })
+    return <div>{boardItem}</div>
   }
 }
 
@@ -65,6 +61,8 @@ class Game extends React.Component {
       history: [{ squares: Array(9).fill(null) }],
       xIsNext: true,
       stepNumber: 0,
+      isPositiveOrder: true,
+      lineSquares: [],
     }
   }
 
@@ -76,10 +74,12 @@ class Game extends React.Component {
       return
     }
     squares[i] = this.state.xIsNext ? "X" : "O"
+    // 坐标系 以左上角为原点 向右向下为正方向
     this.setState({
       history: history.concat([
         {
           squares: squares,
+          coordinate: `(  ${i % 3},${Math.floor(i / 3)}  )`,
         },
       ]),
       xIsNext: !this.state.xIsNext,
@@ -94,16 +94,30 @@ class Game extends React.Component {
     })
   }
 
+  changeOrder() {
+    this.setState({
+      isPositiveOrder: !this.state.isPositiveOrder,
+    })
+  }
+
   render() {
     const history = this.state.history
     const current = history[this.state.stepNumber]
-    const winner = calculateWinner(current.squares)
+    let winner = ""
+    let lineSquares = []
+    const calRes = calculateWinner(current.squares)
+    if (calRes) {
+      winner = calRes.winner
+      lineSquares = calRes.lineSquares
+    }
+    const isMore = current.squares.some((square) => !square)
 
     const moves = history.map((step, move) => {
-      const desc = move ? "Go to move #" + move : "Go to game start"
+      const desc = move ? "Go to move #" + step.coordinate : "Go to game start"
+      const style = { fontWeight: move === this.state.stepNumber ? "bold" : "" }
       return (
-        <li>
-          <button onClick={() => this.jumpTo(move)} key={move}>
+        <li key={move}>
+          <button style={style} onClick={() => this.jumpTo(move)}>
             {desc}
           </button>
         </li>
@@ -113,6 +127,8 @@ class Game extends React.Component {
     let status
     if (winner) {
       status = "Winner: " + winner
+    } else if (!isMore) {
+      status = "平局"
     } else {
       status = "Next player: " + (this.state.xIsNext ? "X" : "O")
     }
@@ -120,11 +136,20 @@ class Game extends React.Component {
     return (
       <div className='game'>
         <div className='game-board'>
-          <Board squares={current} onClick={this.handleClick()} />
+          <Board
+            lineSquares={lineSquares}
+            squares={current.squares}
+            onClick={(i) => {
+              this.handleClick(i)
+            }}
+          />
         </div>
         <div className='game-info'>
           <div>{status}</div>
-          <ol>{moves}</ol>
+          <div>
+            <button onClick={() => this.changeOrder()}>切换顺序</button>
+          </div>
+          <ol>{this.state.isPositiveOrder ? moves : moves.reverse()}</ol>
         </div>
       </div>
     )
